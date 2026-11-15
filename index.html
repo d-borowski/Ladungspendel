@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Das Ladungspendel</title>
+<style>
+  :root { color-scheme: light; --ink:#111; --bg:#fff; --muted:#555; --line:#cfcfcf; --accent:#1a4fa0; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; }
+  main { max-width:920px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.4rem; margin:0 0 4px; }
+  .sub { color:var(--muted); margin:0 0 12px; }
+  .controls { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px; }
+  button { font:inherit; padding:8px 14px; border:2px solid var(--ink); background:#fff; color:var(--ink);
+           border-radius:8px; cursor:pointer; }
+  button:hover { background:#f1f1f1; }
+  button:focus-visible, input:focus-visible { outline:3px solid var(--accent); outline-offset:2px; }
+  button.primary { background:var(--ink); color:#fff; }
+  button.primary:hover { background:#333; }
+  button:disabled { opacity:.4; cursor:default; }
+  .check { display:flex; align-items:center; gap:8px; margin-left:auto; cursor:pointer; }
+  .check input { width:20px; height:20px; }
+  .stage { border:2px solid var(--ink); border-radius:10px; background:#fff; overflow:hidden;
+           width:min(100%, max(380px, calc((100vh - 400px) * 600 / 370))); margin:0 auto; }
+  svg { display:block; width:100%; height:auto; user-select:none; -webkit-user-select:none; }
+  svg text { font-family:inherit; }
+  .info { margin-top:12px; padding:12px 14px; border:1px solid var(--line); border-radius:8px; }
+  .info p { margin:0 0 8px; }
+  .info p:last-child { margin:0; }
+  #bild { font-weight:700; }
+  #text { min-height:4.5em; }
+  .hint { color:var(--muted); }
+  .note { color:var(--muted); font-size:.92rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Das Ladungspendel: Bild für Bild</h1>
+  <p class="sub">Die Bilder entsprechen den Nummern auf dem Arbeitsblatt. Erkläre zuerst selbst, was passiert, und blende dann bei Bedarf den Erklärtext ein.</p>
+
+  <div class="controls">
+    <button id="back" type="button">◀ Zurück</button>
+    <button id="next" type="button" class="primary">Weiter ▶</button>
+    <button id="play" type="button">Automatisch abspielen</button>
+    <button id="reset" type="button">Zurücksetzen</button>
+    <label class="check"><input id="showText" type="checkbox"> Erklärtext einblenden</label>
+  </div>
+
+  <div class="stage">
+    <svg id="svg" viewBox="0 0 600 370" role="img"
+         aria-label="Ein Tischtennisball hängt als Pendel zwischen einer positiv und einer negativ geladenen Metallkugel.">
+      <defs>
+        <marker id="arrow" markerUnits="userSpaceOnUse" markerWidth="12" markerHeight="10" refX="11" refY="5" orient="auto">
+          <path d="M0,0 L12,5 L0,10 z" fill="#000"/>
+        </marker>
+      </defs>
+      <rect width="600" height="370" fill="#fff"/>
+      <!-- Halterung -->
+      <line x1="260" y1="40" x2="340" y2="40" stroke="#000" stroke-width="6"/>
+      <!-- linke Kugel (positiv) -->
+      <circle cx="115" cy="230" r="55" fill="#fff" stroke="#000" stroke-width="3"/>
+      <line x1="95" y1="230" x2="135" y2="230" stroke="#000" stroke-width="4"/>
+      <line x1="115" y1="210" x2="115" y2="250" stroke="#000" stroke-width="4"/>
+      <rect x="109" y="285" width="12" height="50" fill="#fff" stroke="#000" stroke-width="3"/>
+      <rect x="80" y="335" width="70" height="10" fill="#000"/>
+      <!-- rechte Kugel (negativ) -->
+      <circle cx="485" cy="230" r="55" fill="#fff" stroke="#000" stroke-width="3"/>
+      <line x1="465" y1="230" x2="505" y2="230" stroke="#000" stroke-width="4"/>
+      <rect x="479" y="285" width="12" height="50" fill="#fff" stroke="#000" stroke-width="3"/>
+      <rect x="450" y="335" width="70" height="10" fill="#000"/>
+      <!-- Pendel -->
+      <line id="thread" x1="300" y1="40" x2="300" y2="230" stroke="#000" stroke-width="2"/>
+      <circle id="ball" cx="300" cy="230" r="34" fill="#fff" stroke="#000" stroke-width="3"/>
+      <g id="glyphs"></g>
+      <polyline id="move" points="" fill="none" stroke="#000" stroke-width="2" marker-end="url(#arrow)" opacity="0"/>
+      <!-- Bildnummer -->
+      <circle cx="30" cy="30" r="18" fill="#fff" stroke="#000" stroke-width="2.5"/>
+      <text id="num" x="30" y="37" text-anchor="middle" font-size="20" font-weight="bold">1</text>
+    </svg>
+  </div>
+
+  <div class="info" aria-live="polite">
+    <p id="bild"></p>
+    <p id="text"></p>
+    <p class="note">Hinweis: Es sind nur wenige Ladungen gezeichnet; in Wirklichkeit sind es sehr viele. Beim Ladungsausgleich fließen Elektronen, die Ladungszeichen im Bild stehen vereinfacht für die Ladung insgesamt.</p>
+  </div>
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var NS = 'http://www.w3.org/2000/svg';
+  function el(tag, attrs, parent) {
+    var e = document.createElementNS(NS, tag);
+    for (var k in attrs) e.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(e);
+    return e;
+  }
+
+  var PIV = { x: 300, y: 40 }, L = 190;
+  var PHI_C = Math.asin(100.848 / 190);      // Berührung mit einer Kugel
+  var PHI_H = Math.asin(48 / 190);           // auf halbem Weg
+  var TRANS = 2.4, HOLD = 1.8;               // Dauer einer Bewegung / Pause beim automatischen Ablauf (s)
+
+  /* ---------- Schritte (entsprechen den Bildern 1 bis 10 des Arbeitsblatts) ----------
+     g: [P1, P2, M1, M2] mit [x, y, Deckkraft] relativ zum Ballmittelpunkt.
+     P = positive Ladungen, M = negative Ladungen. Verborgene Ladungen warten in der Kugel. */
+  var STEPS = [
+    { id: 1,  phi: 0,       g: [[-12,-8,1],[12,8,1],[12,-8,1],[-12,8,1]],
+      text: 'Ausgangslage: Der Tischtennisball ist mit Graphit überzogen, also leitend. Er ist ungeladen (gleich viele positive und negative Ladungen). Links steht eine positiv geladene, rechts eine negativ geladene Metallkugel.' },
+    { id: 2,  phi: 0,       g: [[14,-8,1],[14,8,1],[-14,-8,1],[-14,8,1]],
+      text: 'Influenz: Die Ladungen im Ball werden verschoben. Die negative Kugel zieht die positiven Ladungen an (nach rechts), die positive Kugel zieht die negativen Ladungen an (nach links). Insgesamt bleibt der Ball ungeladen.' },
+    { id: 3,  phi: -PHI_H, g: [[14,-8,1],[14,8,1],[-14,-8,1],[-14,8,1]], arrow: -1,
+      text: 'Der Ball bewegt sich zur linken Kugel. Auf seiner linken Seite sitzt negative Ladung, die der positiven Kugel zugewandt ist. Diese ungleichnamigen Ladungen sind näher beieinander, die Anziehung überwiegt.' },
+    { id: 4,  phi: -PHI_C, g: [[14,-8,1],[14,8,1],[-14,-8,1],[-14,8,1]],
+      text: 'Der Ball berührt die positive Kugel. Ein Ladungsausgleich hat noch nicht stattgefunden.' },
+    { id: 5,  phi: -PHI_C, g: [[-12,0,1],[12,0,1],[-74,24,0],[-74,36,0]],
+      text: 'Ladungsausgleich: Negative Ladungen fließen vom Ball auf die positive Kugel. Der Ball ist jetzt positiv geladen.' },
+    { id: 6,  phi: 0,       g: [[-12,0,1],[12,0,1],[74,24,0],[74,36,0]], arrow: 1,
+      text: 'Der positive Ball wird von der positiven Kugel abgestoßen (gleichnamige Ladungen) und von der negativen Kugel angezogen. Er bewegt sich nach rechts.' },
+    { id: 7,  phi: PHI_C,  g: [[-12,0,1],[12,0,1],[74,24,0],[74,36,0]],
+      text: 'Der Ball berührt die negative Kugel. Ein Ladungsausgleich hat noch nicht stattgefunden.' },
+    { id: 8,  phi: PHI_C,  g: [[-12,0,0],[12,0,0],[-12,0,1],[12,0,1]],
+      text: 'Ladungsausgleich: Negative Ladungen fließen von der Kugel auf den Ball. Sie gleichen die positive Ladung aus, und der Ball ist jetzt negativ geladen.' },
+    { id: 9,  phi: 0,       g: [[-74,24,0],[-74,36,0],[-12,0,1],[12,0,1]], arrow: -1,
+      text: 'Der negative Ball wird von der negativen Kugel abgestoßen (gleichnamige Ladungen) und von der positiven Kugel angezogen. Er bewegt sich nach links.' },
+    { id: 10, phi: -PHI_C, g: [[-74,24,0],[-74,36,0],[-12,0,1],[12,0,1]],
+      text: 'Der Ball berührt wieder die positive Kugel. Es folgt ein Ladungsausgleich wie in Bild 5, und der Vorgang wiederholt sich: Das Pendel schwingt dauerhaft hin und her.' }
+  ];
+  function nextIndex(i) { return i < STEPS.length - 1 ? i + 1 : 4; }   // nach Bild 10 geht es mit Bild 5 weiter
+
+  /* ---------- Darstellung ---------- */
+  var thread = document.getElementById('thread');
+  var ball = document.getElementById('ball');
+  var glyphG = document.getElementById('glyphs');
+  var moveArrow = document.getElementById('move');
+  var numText = document.getElementById('num');
+  var glyphs = [];
+  [['+', 'P1'], ['+', 'P2'], ['-', 'M1'], ['-', 'M2']].forEach(function (d) {
+    glyphs.push({ sign: d[0], el: el('path', { fill: 'none', stroke: '#000', 'stroke-width': 2.6 }, glyphG) });
+  });
+  function glyphPath(x, y, sign) {
+    var s = 6;
+    var d = 'M' + (x - s).toFixed(1) + ' ' + y.toFixed(1) + 'H' + (x + s).toFixed(1);
+    if (sign === '+') d += 'M' + x.toFixed(1) + ' ' + (y - s).toFixed(1) + 'V' + (y + s).toFixed(1);
+    return d;
+  }
+  function center(phi) { return { x: PIV.x + L * Math.sin(phi), y: PIV.y + L * Math.cos(phi) }; }
+
+  var cur = { phi: 0, g: STEPS[0].g.map(function (a) { return a.slice(); }) };   // aktuell angezeigter Zustand
+
+  function render(arrowAlpha, arrowStep) {
+    var c = center(cur.phi);
+    thread.setAttribute('x2', c.x.toFixed(1)); thread.setAttribute('y2', c.y.toFixed(1));
+    ball.setAttribute('cx', c.x.toFixed(1)); ball.setAttribute('cy', c.y.toFixed(1));
+    for (var i = 0; i < 4; i++) {
+      var g = cur.g[i];
+      glyphs[i].el.setAttribute('d', glyphPath(c.x + g[0], c.y + g[1], glyphs[i].sign));
+      glyphs[i].el.setAttribute('opacity', Math.max(0, Math.min(1, g[2])).toFixed(2));
+    }
+    // Bewegungspfeil: tangential zur Bahn, leicht gebogen
+    if (arrowAlpha > 0 && arrowStep) {
+      var th = cur.phi, dir = arrowStep.arrow;
+      var a = dir > 0 ? th : th + Math.PI;
+      var x = c.x + 38 * Math.cos(a), y = c.y - 38 * Math.sin(a);
+      var pts = [[x, y]], kappa = 1 / 380, n = 10, ds = 34 / n;
+      for (var k = 0; k < n; k++) { a += dir * kappa * ds; x += ds * Math.cos(a); y -= ds * Math.sin(a); pts.push([x, y]); }
+      moveArrow.setAttribute('points', pts.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '));
+      moveArrow.setAttribute('opacity', arrowAlpha.toFixed(2));
+    } else {
+      moveArrow.setAttribute('opacity', '0');
+    }
+  }
+
+  /* ---------- Ablaufsteuerung ---------- */
+  var index = 0, history = [], round = 0;
+  var trans = null;          // { from, toIndex, t }
+  var playing = false, holdTimer = 0, arrowAlpha = 0;
+
+  var backBtn = document.getElementById('back');
+  var nextBtn = document.getElementById('next');
+  var playBtn = document.getElementById('play');
+  var showText = document.getElementById('showText');
+  var bildP = document.getElementById('bild');
+  var textP = document.getElementById('text');
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function ease(t) { return 0.5 - 0.5 * Math.cos(Math.PI * t); }
+
+  function updateInfo() {
+    var st = STEPS[index];
+    numText.textContent = st.id;
+    bildP.textContent = 'Bild ' + st.id + (round > 0 && st.id >= 5 ? ' (der Vorgang wiederholt sich)' : '');
+    if (showText.checked) { textP.textContent = st.text; textP.className = ''; }
+    else { textP.textContent = 'Beschreibe und erkläre zuerst selbst, was in diesem Bild passiert. Blende dann den Erklärtext ein.'; textP.className = 'hint'; }
+    backBtn.disabled = history.length === 0;
+  }
+
+  function snapshot() { return { phi: cur.phi, g: cur.g.map(function (a) { return a.slice(); }) }; }
+  function finishTransition() {
+    if (!trans) return;
+    var st = STEPS[trans.toIndex];
+    cur.phi = st.phi; cur.g = st.g.map(function (a) { return a.slice(); });
+    index = trans.toIndex; trans = null; holdTimer = 0;
+    updateInfo();
+  }
+  function startTransition(toIndex) {
+    finishTransition();
+    trans = { from: snapshot(), toIndex: toIndex, t: 0 };
+    arrowAlpha = 0;
+    if (toIndex === 4 && index === 9) round++;
+  }
+  function goNext() {
+    finishTransition();
+    history.push(index);
+    startTransition(nextIndex(index));
+  }
+  function goBack() {
+    if (!history.length) return;
+    finishTransition();
+    var prev = history.pop();
+    trans = { from: snapshot(), toIndex: prev, t: 0 };
+    arrowAlpha = 0; holdTimer = 0;
+    if (prev === 9 && index === 4 && round > 0) round--;
+    backBtn.disabled = history.length === 0;
+  }
+  function reset() {
+    trans = null; history = []; index = 0; round = 0; playing = false; holdTimer = 0; arrowAlpha = 0;
+    cur.phi = STEPS[0].phi; cur.g = STEPS[0].g.map(function (a) { return a.slice(); });
+    playBtn.textContent = 'Automatisch abspielen';
+    updateInfo();
+  }
+
+  nextBtn.addEventListener('click', goNext);
+  backBtn.addEventListener('click', goBack);
+  document.getElementById('reset').addEventListener('click', reset);
+  playBtn.addEventListener('click', function () {
+    playing = !playing;
+    playBtn.textContent = playing ? 'Anhalten' : 'Automatisch abspielen';
+    holdTimer = HOLD;      // gleich weiter
+  });
+  showText.addEventListener('change', updateInfo);
+  document.addEventListener('keydown', function (e) {
+    if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON')) { if (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft') return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); goNext(); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); goBack(); }
+  });
+
+  var last = performance.now();
+  function frame(now) {
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    if (trans) {
+      trans.t += dt / TRANS;
+      var t = Math.min(1, trans.t), e = ease(t), to = STEPS[trans.toIndex];
+      cur.phi = lerp(trans.from.phi, to.phi, e);
+      for (var i = 0; i < 4; i++) for (var j = 0; j < 3; j++) cur.g[i][j] = lerp(trans.from.g[i][j], to.g[i][j], e);
+      if (t >= 1) finishTransition();
+    } else {
+      var st = STEPS[index];
+      arrowAlpha = st.arrow ? Math.min(1, arrowAlpha + dt * 2.5) : 0;
+      if (playing) {
+        holdTimer += dt;
+        if (holdTimer >= HOLD) goNext();
+      }
+    }
+    render(trans ? 0 : arrowAlpha, STEPS[index]);
+    requestAnimationFrame(frame);
+  }
+  reset();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
